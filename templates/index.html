@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube to MP3 Converter</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="glass-panel">
+            <h1>YT <span>Audio</span></h1>
+            <p class="subtitle">Convert any YouTube video to high-quality MP3</p>
+            
+            <form id="convertForm">
+                <div class="input-group">
+                    <input type="url" id="urlInput" placeholder="Paste YouTube link here..." required>
+                    <button type="submit" id="convertBtn">Convert</button>
+                </div>
+            </form>
+
+            <div id="statusContainer" class="hidden">
+                <div class="loader-container">
+                    <div class="loader"></div>
+                    <p id="statusText">Processing your video...</p>
+                </div>
+            </div>
+            
+            <div id="resultContainer" class="hidden">
+                <div class="success-icon">✓</div>
+                <h3 id="resultTitle">Audio Title</h3>
+                <a href="#" id="downloadLink" class="download-btn">Download MP3</a>
+                <button id="convertAnother" class="text-btn">Convert Another</button>
+            </div>
+
+            <div id="errorContainer" class="hidden">
+                <div class="error-icon">!</div>
+                <p id="errorText">Something went wrong.</p>
+                <button id="retryBtn" class="text-btn">Try Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('convertForm');
+        const urlInput = document.getElementById('urlInput');
+        const convertBtn = document.getElementById('convertBtn');
+        const statusContainer = document.getElementById('statusContainer');
+        const statusText = document.getElementById('statusText');
+        const resultContainer = document.getElementById('resultContainer');
+        const resultTitle = document.getElementById('resultTitle');
+        const downloadLink = document.getElementById('downloadLink');
+        const errorContainer = document.getElementById('errorContainer');
+        const errorText = document.getElementById('errorText');
+        const convertAnother = document.getElementById('convertAnother');
+        const retryBtn = document.getElementById('retryBtn');
+
+        function resetUI() {
+            form.classList.remove('hidden');
+            statusContainer.classList.add('hidden');
+            resultContainer.classList.add('hidden');
+            errorContainer.classList.add('hidden');
+            urlInput.value = '';
+        }
+
+        convertAnother.addEventListener('click', resetUI);
+        retryBtn.addEventListener('click', resetUI);
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = urlInput.value;
+            if (!url) return;
+
+            form.classList.add('hidden');
+            statusContainer.classList.remove('hidden');
+            
+            try {
+                const formData = new FormData();
+                formData.append('url', url);
+
+                const response = await fetch('/convert', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error('Failed to start conversion');
+                
+                const data = await response.json();
+                const taskId = data.task_id;
+
+                pollStatus(taskId);
+
+            } catch (error) {
+                showError(error.message);
+            }
+        });
+
+        async function pollStatus(taskId) {
+            try {
+                const response = await fetch(`/status/${taskId}`);
+                const data = await response.json();
+
+                if (data.status === 'processing') {
+                    setTimeout(() => pollStatus(taskId), 2000);
+                } else if (data.status === 'completed') {
+                    showSuccess(data.title, taskId);
+                } else {
+                    showError(data.error || 'Conversion failed');
+                }
+            } catch (error) {
+                showError('Error checking status');
+            }
+        }
+
+        function showSuccess(title, taskId) {
+            statusContainer.classList.add('hidden');
+            resultContainer.classList.remove('hidden');
+            resultTitle.textContent = title;
+            downloadLink.href = `/download/${taskId}`;
+        }
+
+        function showError(message) {
+            statusContainer.classList.add('hidden');
+            errorContainer.classList.remove('hidden');
+            errorText.textContent = message;
+        }
+    </script>
+</body>
+</html>
